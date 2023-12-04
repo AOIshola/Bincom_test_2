@@ -53,12 +53,14 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
         return html_content
 
     def handle_sum_polling_units(self, query):
+        lgas = self.get_local_governments()
         if 'lga_id' in query:
             lga_id = int(query['lga_id'][0])
             total_score = self.get_sum_of_polling_units(lga_id)
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
+            select_options = ''.join(f"<option value='{lga[0]}' {'selected' if lga[0] == lga_id else ''}>{lga[1]}</option>" for lga in lgas)
             result_html = f"""
                 <!DOCTYPE html>
                 <html>
@@ -67,6 +69,12 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
                 </head>
                 <body>
                     <h1>Summed Result for the Selected Local Government</h1>
+                    <form action='/sum_polling_units' method='get'>
+                        <label for='local_gov'>Select Local Government:</label>
+                        <select id='local_gov' name='lga_id' onchange='this.form.submit()'>
+                            {select_options}
+                        </select>
+                    </form>
                     <p>Total Score: {total_score}</p>
                 </body>
                 </html>
@@ -76,6 +84,19 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(400)
             self.end_headers()
             self.wfile.write(b"Missing 'lga_id' parameter.")
+
+    def get_local_governments(self):
+        # Fetch available local governments from the database
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+
+        query = "SELECT uniqueid, lga_name FROM lga"
+        cursor.execute(query)
+        lgas = cursor.fetchall()
+
+        connection.close()
+
+        return lgas
 
     def get_sum_of_polling_units(self, lga_id):
         connection = mysql.connector.connect(**db_config)
@@ -118,7 +139,6 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
             </head>
             <body>
                 <h1>{polling_unit_name} Results</h1>
-                <!-- Add your form or content for storing results for all parties -->
             </body>
             </html>
         """
